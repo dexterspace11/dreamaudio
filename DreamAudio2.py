@@ -1,10 +1,10 @@
-# streamlit_dream_audio.py (Enhanced with colorful fractals and video export)
+# streamlit_dream_audio.py (No moviepy required)
 import streamlit as st
 import numpy as np
 import librosa
 import librosa.display
-import soundfile as sf
 import matplotlib.pyplot as plt
+import soundfile as sf
 import hashlib
 import json
 import random
@@ -12,7 +12,8 @@ import time
 from datetime import datetime
 from collections import OrderedDict
 from PIL import Image, ImageDraw
-from moviepy.editor import ImageSequenceClip, AudioFileClip
+import imageio
+import io
 import os
 
 # ------------------ Memory Structures ------------------
@@ -182,53 +183,46 @@ if uploaded_file is not None:
 
     net = IntuitiveNeuralNetwork()
     signature = []
-
-    st.write("Generating dream... 🧠")
     fig_placeholder = st.empty()
-    frame_dir = "frames"
-    os.makedirs(frame_dir, exist_ok=True)
+    frame_images = []
 
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(5, 5))
+    st.write("Generating dream... 🧠")
 
-    for i in range(min(S_db.shape[1], 200)):
+    for i in range(min(S_db.shape[1], 120)):
         pattern = S_db[:, i] / 80.0
         sim = net.train_on_sequence(pattern)
         signature.append(pattern.tolist())
 
         ax.clear()
         t = np.linspace(0, 2 * np.pi, 64)
-        r = 1 + 0.4 * np.array(pattern)
+        r = 1 + 0.5 * np.array(pattern)
         x = r * np.cos(t)
         y = r * np.sin(t)
-        color = plt.cm.viridis(i / 200)
-        ax.fill(x, y, color=color, alpha=0.7)
+        color = plt.cm.viridis(i % 64 / 64)
+        ax.fill(x, y, color=color, alpha=0.6)
         ax.set_xlim(-2, 2)
         ax.set_ylim(-2, 2)
         ax.axis('off')
-        ax.set_title(f"Dream Frame {i+1}", fontsize=10)
+        ax.set_title(f"Dream Frame {i+1}")
+
         fig_placeholder.pyplot(fig)
 
-        frame_path = os.path.join(frame_dir, f"frame_{i:03d}.png")
-        fig.savefig(frame_path)
-        time.sleep(0.01)
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        frame_images.append(imageio.v3.imread(buf))
+        buf.close()
+        time.sleep(0.02)
+
+    output_video = "dream_from_audio.mp4"
+    imageio.mimsave(output_video, frame_images, fps=10)
 
     with open("audio_dream_signature.json", "w") as f:
         json.dump({"patterns": signature[:50]}, f)
 
-    # Save dream audio as WAV
-    sf.write("dream_audio.wav", y, sr)
-
-    # Create downloadable video from frames and audio
-    try:
-        audio_clip = AudioFileClip("dream_audio.wav")
-        clip = ImageSequenceClip(frame_dir, fps=15)
-        clip = clip.set_audio(audio_clip)
-        video_path = "dream_video.mp4"
-        clip.write_videofile(video_path, codec='libx264', audio_codec='aac')
-        with open(video_path, "rb") as f:
-            st.download_button("🎬 Download Dream Video", f, file_name="dream_video.mp4")
-    except Exception as e:
-        st.error(f"❌ Video export failed: {e}")
-
     st.success("✅ Dream sequence complete!")
+    with open(output_video, "rb") as f:
+        st.download_button("⬇️ Download Dream Video", f, file_name=output_video, mime="video/mp4")
+
     st.json({"Dream Signature Sample": signature[0]})
