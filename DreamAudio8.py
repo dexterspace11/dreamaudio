@@ -1,20 +1,18 @@
-# streamlit_dream_audio_neuralmap.py
-
 import streamlit as st
 import numpy as np
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 import json
-import random
 import time
 from datetime import datetime
 from collections import OrderedDict
+from io import BytesIO
 from PIL import Image
 import os
-import soundfile as sf
-import subprocess
 from pydub import AudioSegment
+import soundfile as sf
+import glob
 
 # ------------------ Memory Structures ------------------
 
@@ -179,14 +177,18 @@ frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
+    # Convert to WAV and save
     audio_path = "/mnt/data/audio.wav"
-    if uploaded_file.type == "audio/mp3":
-        audio = AudioSegment.from_file(uploaded_file, format="mp3")
-        audio.export(audio_path, format="wav")
-    else:
-        y, sr = librosa.load(uploaded_file, sr=None)
-        sf.write(audio_path, y, sr)
+    audio_bytes = BytesIO(uploaded_file.read())
 
+    try:
+        audio = AudioSegment.from_file(audio_bytes)
+        audio.export(audio_path, format="wav")
+    except Exception as e:
+        st.error(f"❌ Audio conversion failed: {e}")
+        st.stop()
+
+    # Load audio
     y, sr = librosa.load(audio_path, sr=None)
 
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
@@ -253,18 +255,22 @@ if uploaded_file is not None:
     with open("/mnt/data/audio_dream_signature.json", "w") as f:
         json.dump({"patterns": signature[:50]}, f)
 
-    video_output = "/mnt/data/dream_output.mp4"
-    command = [
-        "ffmpeg", "-y",
-        "-framerate", "10",
-        "-i", f"{frame_dir}/frame_%04d.png",
-        "-i", audio_path,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-shortest",
-        video_output
-    ]
-    subprocess.run(command)
+    # Create GIF from frames
+    gif_output = "/mnt/data/dream_animation.gif"
+    frame_files = sorted(glob.glob(f"{frame_dir}/frame_*.png"))
+    frames = [Image.open(f).convert("RGB") for f in frame_files]
+    frames[0].save(gif_output, save_all=True, append_images=frames[1:], duration=100, loop=0)
 
+    # Output download and preview
     st.success("✅ Dream sequence complete!")
     st.json({"Dream Signature Sample": signature[0]})
-    st.video(video_output)
+
+    with open(gif_output, "rb") as f:
+        st.download_button("⬇️ Download Dream Animation (GIF)", f, file_name="dream.gif", mime="image/gif")
+
+    with open(audio_path, "rb") as f:
+        st.download_button("⬇️ Download Dream Audio (WAV)", f, file_name="dream_audio.wav", mime="audio/wav")
+
+    st.image(gif_output, caption="🌀 Dream Animation Preview", use_column_width=True)
+    st.audio(audio_path)
+
