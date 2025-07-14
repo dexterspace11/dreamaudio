@@ -12,6 +12,7 @@ from PIL import Image
 import os
 import soundfile as sf
 import glob
+import tempfile
 
 # ------------------ Memory Structures ------------------
 
@@ -170,21 +171,27 @@ st.title("🎵 Dream Fractals: A Neural Dream from Music")
 uploaded_file = st.file_uploader("Upload MP3/WAV file", type=["mp3", "wav"])
 frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
 
+# Setup temp paths for cross-platform compatibility
+temp_dir = tempfile.gettempdir()
+tmp_input_path = os.path.join(temp_dir, "temp_input")
+audio_path = os.path.join(temp_dir, "audio.wav")
+frame_dir = os.path.join(temp_dir, "frames")
+gif_output = os.path.join(temp_dir, "dream_animation.gif")
+json_path = os.path.join(temp_dir, "audio_dream_signature.json")
+
 if uploaded_file is not None:
     # Read uploaded file once into memory
     file_bytes = uploaded_file.read()
     audio_bytes = BytesIO(file_bytes)
 
-    # Preview audio
+    # Audio preview from memory
     st.audio(audio_bytes)
 
-    # Save to file so librosa can read it
-    tmp_input_path = "/mnt/data/temp_input"
-    audio_path = "/mnt/data/audio.wav"
+    # Save uploaded file to temp location for librosa
+    os.makedirs(frame_dir, exist_ok=True)
     with open(tmp_input_path, "wb") as f:
         f.write(file_bytes)
 
-    # Try decoding with librosa
     try:
         y, sr = librosa.load(tmp_input_path, sr=None)
         sf.write(audio_path, y, sr)
@@ -206,9 +213,6 @@ if uploaded_file is not None:
     fig2, ax2 = plt.subplots(figsize=(4, 4))
     placeholder1 = col1.empty()
     placeholder2 = col2.empty()
-
-    frame_dir = "/mnt/data/frames"
-    os.makedirs(frame_dir, exist_ok=True)
 
     for i in range(min(S_db.shape[1], frame_limit)):
         pattern = S_db[:, i] / 80.0
@@ -252,16 +256,14 @@ if uploaded_file is not None:
         fig1.savefig(f"{frame_dir}/frame_{i:04d}.png", bbox_inches='tight')
         time.sleep(0.01)
 
-    with open("/mnt/data/audio_dream_signature.json", "w") as f:
+    with open(json_path, "w") as f:
         json.dump({"patterns": signature[:50]}, f)
 
-    # Create GIF
-    gif_output = "/mnt/data/dream_animation.gif"
+    # Create GIF animation from frames
     frame_files = sorted(glob.glob(f"{frame_dir}/frame_*.png"))
     frames = [Image.open(f).convert("RGB") for f in frame_files]
     frames[0].save(gif_output, save_all=True, append_images=frames[1:], duration=100, loop=0)
 
-    # Download and preview
     st.success("✅ Dream sequence complete!")
     st.json({"Dream Signature Sample": signature[0]})
 
@@ -271,5 +273,5 @@ if uploaded_file is not None:
     with open(audio_path, "rb") as f:
         st.download_button("⬇️ Download Dream Audio (WAV)", f, file_name="dream_audio.wav", mime="audio/wav")
 
-    st.image(gif_output, caption="🌀 Dream Animation Preview", use_column_width=True)
-    st.audio(audio_path)
+    st
+
