@@ -177,12 +177,11 @@ frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
-    # Save uploaded audio for later use in video
+    # Save audio for video sync
     audio_path = "/mnt/data/audio.wav"
-    y, sr = librosa.load(uploaded_file, sr=None)
-    sf.write(audio_path, y, sr)
+    sf.write(audio_path, y, sr, format='WAV', subtype='PCM_16')
 
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
+        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
     S_db = librosa.power_to_db(S, ref=np.max)
     rms = librosa.feature.rms(y=y)[0]
     chroma = librosa.feature.chroma_stft(y=y, sr=sr)
