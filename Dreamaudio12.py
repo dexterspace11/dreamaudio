@@ -1,21 +1,15 @@
-# ✅ Full Updated Code for: streamlit_dream_audio_neuralmap_advanced.py
-# Includes:
-# - More geometric shapes (square, triangle, polygon, lattice)
-# - Improved neuron growth (adjusted curiosity + novelty sensitivity)
-# - Maintains full visual + neural layout
+# streamlit_dream_audio_neuralmap_advanced.py
 
 import streamlit as st
 import numpy as np
 import librosa
-import librosa.display
 import matplotlib.pyplot as plt
-import json
-import time
 from datetime import datetime
 from collections import OrderedDict
 from PIL import Image
 import io
 import base64
+import time
 
 # ------------------ Memory Structures ------------------
 
@@ -164,5 +158,145 @@ class IntuitiveNeuralNetwork:
         return sim
 
 # ------------------ Streamlit App ------------------
-# [Now includes full rendering logic with added geometric shapes and neuron growth display]
-# Paste continued full UI and visualization logic here when you're ready for export or deployment.
+
+st.set_page_config(page_title="🎷 Dreaming from Music", layout="wide")
+st.title("🎵 Dream Fractals: A Neural Dream from Music")
+
+uploaded_file = st.file_uploader("Upload MP3/WAV file", type=["mp3", "wav"])
+frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
+
+def random_color_by_emotion(emotion):
+    # Map emotional weight (0 to ~3) to colors
+    base_colors = [
+        (0.9, 0.1, 0.1),  # red
+        (0.1, 0.9, 0.1),  # green
+        (0.1, 0.1, 0.9),  # blue
+        (0.9, 0.9, 0.1),  # yellow
+        (0.9, 0.1, 0.9),  # magenta
+        (0.1, 0.9, 0.9),  # cyan
+    ]
+    idx = int((emotion * 3) % len(base_colors))
+    return base_colors[idx]
+
+def draw_shape(ax, shape_type, x, y, size, color, reward, pattern):
+    if shape_type == 0:
+        # Circle
+        circle = plt.Circle((x, y), size, color=color, alpha=0.7)
+        ax.add_patch(circle)
+    elif shape_type == 1:
+        # Square
+        square = plt.Rectangle((x - size/2, y - size/2), size, size, color=color, alpha=0.6)
+        ax.add_patch(square)
+    elif shape_type == 2:
+        # Triangle
+        triangle = plt.Polygon([[x, y + size/1.5], [x - size, y - size/2], [x + size, y - size/2]], color=color, alpha=0.7)
+        ax.add_patch(triangle)
+    elif shape_type == 3:
+        # Polygon (pentagon)
+        n = 5
+        angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        verts = np.array([(x + size * np.cos(a), y + size * np.sin(a)) for a in angles])
+        polygon = plt.Polygon(verts, color=color, alpha=0.5)
+        ax.add_patch(polygon)
+    elif shape_type == 4:
+        # Lattice/grid of dots
+        for dx in np.linspace(x - size, x + size, 5):
+            for dy in np.linspace(y - size, y + size, 5):
+                ax.plot(dx, dy, 'o', color=color, alpha=0.4, markersize=2)
+    else:
+        # Spiral doodle
+        t = np.linspace(0, 4 * np.pi, 100)
+        r = size * (t / (4 * np.pi))
+        xs = x + r * np.cos(t)
+        ys = y + r * np.sin(t)
+        ax.plot(xs, ys, color=color, alpha=0.5, linewidth=1.5)
+
+if uploaded_file is not None:
+    st.audio(uploaded_file)
+    y, sr = librosa.load(uploaded_file, sr=None)
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
+    S_db = librosa.power_to_db(S, ref=np.max)
+    rms = librosa.feature.rms(y=y)[0]
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+
+    net = IntuitiveNeuralNetwork()
+    signature = []
+    frames = []
+
+    st.write("Generating dream... 🧠")
+    col1, col2 = st.columns(2)
+    fig1, ax1 = plt.subplots(figsize=(5, 5))
+    fig2, ax2 = plt.subplots(figsize=(5, 5))
+    placeholder1 = col1.empty()
+    placeholder2 = col2.empty()
+
+    for i in range(min(S_db.shape[1], frame_limit)):
+        pattern = S_db[:, i] / 80.0  # normalize roughly to [0,1]
+        vol = rms[i] if i < len(rms) else 0.5
+        harmony = chroma[:, i].mean() if i < chroma.shape[1] else 0.5
+        reward = (vol + harmony) / 2.0
+
+        sim = net.train_on_sequence(pattern, reward=reward)
+        signature.append(pattern.tolist())
+
+        ax1.clear()
+        shape_type = int((reward * 10 + sim * 10 + i) % 6)
+        color = random_color_by_emotion(reward * sim * 2)
+        size = 0.5 + reward
+
+        # Draw a shape at center with parameters
+        draw_shape(ax1, shape_type, 0, 0, size, color, reward, pattern)
+        ax1.set_xlim(-3, 3)
+        ax1.set_ylim(-3, 3)
+        ax1.axis('off')
+        placeholder1.pyplot(fig1)
+
+        # Neural map visualization
+        ax2.clear()
+        for unit in net.units:
+            pos = unit.position[:2] if len(unit.position) >= 2 else np.random.rand(2)
+            # Normalize pos to [0,1] range for display (simple min-max scaling)
+            pos_min, pos_max = -2, 2
+            x_pos = (pos[0] - pos_min) / (pos_max - pos_min)
+            y_pos = (pos[1] - pos_min) / (pos_max - pos_min)
+            color = random_color_by_emotion(unit.emotional_weight)
+            ax2.plot(x_pos, y_pos, 'o', color=color, alpha=0.8, markersize=10)
+            # Draw connections lightly
+            for conn in unit.connections:
+                if conn < len(net.units):
+                    target = net.units[conn].position[:2]
+                    tx = (target[0] - pos_min) / (pos_max - pos_min)
+                    ty = (target[1] - pos_min) / (pos_max - pos_min)
+                    ax2.plot([x_pos, tx], [y_pos, ty], color='gray', alpha=0.3)
+
+        ax2.set_xlim(0, 1)
+        ax2.set_ylim(0, 1)
+        ax2.axis('off')
+        ax2.set_title(f'Neurons: {len(net.units)}', fontsize=14)
+        placeholder2.pyplot(fig2)
+
+        # Save frame for GIF
+        buf = io.BytesIO()
+        fig1.savefig(buf, format='png')
+        buf.seek(0)
+        frames.append(Image.open(buf))
+        time.sleep(0.01)
+
+    # Save GIF and offer download
+    if frames:
+        gif_buf = io.BytesIO()
+        frames[0].save(gif_buf, format='GIF', append_images=frames[1:], save_all=True, duration=50, loop=0)
+        gif_b64 = base64.b64encode(gif_buf.getvalue()).decode()
+        href = f'<a href="data:image/gif;base64,{gif_b64}" download="neural_dream.gif">Download Dream GIF</a>'
+        st.markdown(href, unsafe_allow_html=True)
+
+    with open("audio_dream_signature.json", "w") as f:
+        json.dump({"patterns": signature[:50]}, f)
+
+    st.success("\u2705 Dream sequence complete!")
+    st.json({"Dream Signature Sample": signature[0]})
+
+else:
+    st.info("Please upload an MP3 or WAV file to start dreaming.")
+
+
