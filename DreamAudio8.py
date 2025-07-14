@@ -171,20 +171,25 @@ uploaded_file = st.file_uploader("Upload MP3/WAV file", type=["mp3", "wav"])
 frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
 
 if uploaded_file is not None:
-    st.audio(uploaded_file)
+    # Read uploaded file once into memory
+    file_bytes = uploaded_file.read()
+    audio_bytes = BytesIO(file_bytes)
 
-    # Save uploaded file to a temp location and decode with librosa
-    audio_path = "/mnt/data/audio.wav"
+    # Preview audio
+    st.audio(audio_bytes)
+
+    # Save to file so librosa can read it
     tmp_input_path = "/mnt/data/temp_input"
-
+    audio_path = "/mnt/data/audio.wav"
     with open(tmp_input_path, "wb") as f:
-        f.write(uploaded_file.read())
+        f.write(file_bytes)
 
+    # Try decoding with librosa
     try:
         y, sr = librosa.load(tmp_input_path, sr=None)
         sf.write(audio_path, y, sr)
     except Exception as e:
-        st.error(f"❌ Librosa could not decode the file: {e}")
+        st.error(f"❌ Could not decode audio: {e}")
         st.stop()
 
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
@@ -199,7 +204,6 @@ if uploaded_file is not None:
     col1, col2 = st.columns(2)
     fig1, ax1 = plt.subplots(figsize=(4, 4))
     fig2, ax2 = plt.subplots(figsize=(4, 4))
-
     placeholder1 = col1.empty()
     placeholder2 = col2.empty()
 
@@ -251,13 +255,13 @@ if uploaded_file is not None:
     with open("/mnt/data/audio_dream_signature.json", "w") as f:
         json.dump({"patterns": signature[:50]}, f)
 
-    # Create GIF from frames
+    # Create GIF
     gif_output = "/mnt/data/dream_animation.gif"
     frame_files = sorted(glob.glob(f"{frame_dir}/frame_*.png"))
     frames = [Image.open(f).convert("RGB") for f in frame_files]
     frames[0].save(gif_output, save_all=True, append_images=frames[1:], duration=100, loop=0)
 
-    # Output download and preview
+    # Download and preview
     st.success("✅ Dream sequence complete!")
     st.json({"Dream Signature Sample": signature[0]})
 
