@@ -10,7 +10,6 @@ from collections import OrderedDict
 from io import BytesIO
 from PIL import Image
 import os
-from pydub import AudioSegment
 import soundfile as sf
 import glob
 
@@ -26,9 +25,6 @@ class WorkingMemory:
         self.patterns[timestamp] = pattern
         if len(self.patterns) > self.capacity:
             self.patterns.popitem(last=False)
-
-    def replay(self):
-        return list(self.patterns.values())
 
 class EpisodicMemory:
     def __init__(self, compress=True):
@@ -177,19 +173,19 @@ frame_limit = st.slider("Number of Dream Frames", 100, 1000, 500, step=50)
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
-    # Convert to WAV and save
+    # Save uploaded file to a temp location and decode with librosa
     audio_path = "/mnt/data/audio.wav"
-    audio_bytes = BytesIO(uploaded_file.read())
+    tmp_input_path = "/mnt/data/temp_input"
+
+    with open(tmp_input_path, "wb") as f:
+        f.write(uploaded_file.read())
 
     try:
-        audio = AudioSegment.from_file(audio_bytes)
-        audio.export(audio_path, format="wav")
+        y, sr = librosa.load(tmp_input_path, sr=None)
+        sf.write(audio_path, y, sr)
     except Exception as e:
-        st.error(f"❌ Audio conversion failed: {e}")
+        st.error(f"❌ Librosa could not decode the file: {e}")
         st.stop()
-
-    # Load audio
-    y, sr = librosa.load(audio_path, sr=None)
 
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
     S_db = librosa.power_to_db(S, ref=np.max)
@@ -273,4 +269,3 @@ if uploaded_file is not None:
 
     st.image(gif_output, caption="🌀 Dream Animation Preview", use_column_width=True)
     st.audio(audio_path)
-
