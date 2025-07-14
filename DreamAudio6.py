@@ -1,9 +1,10 @@
-# streamlit_dream_audio_neuralmap.py
+# streamlit_dream_audio_neuralmap_advanced.py
 import streamlit as st
 import numpy as np
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import json
 import random
 import time
@@ -11,6 +12,7 @@ from datetime import datetime
 from collections import OrderedDict
 from PIL import Image, ImageDraw
 import io
+import base64
 
 # ------------------ Memory Structures ------------------
 
@@ -166,7 +168,7 @@ class IntuitiveNeuralNetwork:
 
 # ------------------ Streamlit App ------------------
 
-st.set_page_config(page_title="🎧 Dreaming from Music", layout="wide")
+st.set_page_config(page_title="🎷 Dreaming from Music", layout="wide")
 st.title("🎵 Dream Fractals: A Neural Dream from Music")
 
 uploaded_file = st.file_uploader("Upload MP3/WAV file", type=["mp3", "wav"])
@@ -178,16 +180,16 @@ if uploaded_file is not None:
     S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=64, fmax=8000)
     S_db = librosa.power_to_db(S, ref=np.max)
     rms = librosa.feature.rms(y=y)[0]
-    chroma = librosa.feature.chroma_stft(y=y, sr=sr)  # Added harmonic info
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
 
     net = IntuitiveNeuralNetwork()
     signature = []
+    frames = []
 
     st.write("Generating dream... 🧠")
     col1, col2 = st.columns(2)
     fig1, ax1 = plt.subplots(figsize=(4, 4))
     fig2, ax2 = plt.subplots(figsize=(4, 4))
-
     placeholder1 = col1.empty()
     placeholder2 = col2.empty()
 
@@ -200,42 +202,56 @@ if uploaded_file is not None:
         sim = net.train_on_sequence(pattern, reward=reward)
         signature.append(pattern.tolist())
 
-        # Fractal dream based on shape diversity
+        # Dream fractals
         ax1.clear()
         t = np.linspace(0, 2 * np.pi, 64)
         r = 1 + 0.6 * np.array(pattern) * (1 + reward * 2)
         x = r * np.cos(t)
         y = r * np.sin(t)
-        shape_type = int((reward * 10) % 3)
-
+        shape_type = int((reward * 10) % 4)
         if shape_type == 0:
             ax1.plot(x, y, color=plt.cm.plasma(sim), alpha=0.8, linewidth=2)
         elif shape_type == 1:
             ax1.fill(x, y, color=plt.cm.viridis(sim), alpha=0.6)
-        else:
+        elif shape_type == 2:
             ax1.scatter(x, y, color=plt.cm.inferno(sim), alpha=0.7, s=5)
-
+        else:
+            ax1.plot(np.sin(x * reward), np.cos(y * reward), '.', color=plt.cm.cool(sim), alpha=0.5)
         ax1.set_xlim(-3, 3)
         ax1.set_ylim(-3, 3)
         ax1.axis('off')
         placeholder1.pyplot(fig1)
 
-        # Neural map
+        # Neural map with connection lines
         ax2.clear()
         for unit in net.units:
-            color = plt.cm.inferno(min(1.0, unit.emotional_weight / 2))
             pos = unit.position[:2] if len(unit.position) >= 2 else np.random.rand(2)
+            color = plt.cm.inferno(min(1.0, unit.emotional_weight / 2))
             ax2.plot(pos[0], pos[1], 'o', color=color, alpha=0.6)
+            for conn in unit.connections:
+                if conn < len(net.units):
+                    target = net.units[conn].position[:2]
+                    ax2.plot([pos[0], target[0]], [pos[1], target[1]], color='gray', alpha=0.2)
         ax2.set_xlim(0, 1)
         ax2.set_ylim(0, 1)
-        ax2.set_title(f"Neural Map - Neurons: {len(net.units)}")
         ax2.axis('off')
         placeholder2.pyplot(fig2)
 
-        time.sleep(0.03)
+        # Save frame for animation
+        buf = io.BytesIO()
+        fig1.savefig(buf, format='png')
+        frames.append(Image.open(buf))
+        time.sleep(0.01)
+
+    # Save GIF and offer download
+    gif_buf = io.BytesIO()
+    frames[0].save(gif_buf, format='GIF', append_images=frames[1:], save_all=True, duration=50, loop=0)
+    gif_b64 = base64.b64encode(gif_buf.getvalue()).decode()
+    href = f'<a href="data:image/gif;base64,{gif_b64}" download="neural_dream.gif">Download Dream GIF</a>'
+    st.markdown(href, unsafe_allow_html=True)
 
     with open("audio_dream_signature.json", "w") as f:
         json.dump({"patterns": signature[:50]}, f)
 
-    st.success("✅ Dream sequence complete!")
+    st.success("\u2705 Dream sequence complete!")
     st.json({"Dream Signature Sample": signature[0]})
